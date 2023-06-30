@@ -1,0 +1,7 @@
+{
+    "displayName": "OS | All Windows 11 Devices",
+    "description": "Containing all Windows 11 versions",
+    "platform": "windows10AndLater",
+    "rule": "(device.osVersion -startsWith \"10.0.2\")",
+    "assignmentFilterManagementType": "devices"
+}

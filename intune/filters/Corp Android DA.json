@@ -1,0 +1,7 @@
+{
+    "displayName": "Corporate Android Device Administrator",
+    "description": "Containing all corporate Android Device Administrator Devices",
+    "platform": "android",
+    "rule": "(device.deviceOwnership -eq \"Corporate\")",
+    "assignmentFilterManagementType": "devices"
+}

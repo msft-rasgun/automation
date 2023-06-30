@@ -1,0 +1,7 @@
+{
+    "displayName": "HW | WIN | All Lenovo Windows Devices",
+    "description": "Containing all Lenovo Windows Devices",
+    "platform": "windows10AndLater",
+    "rule": "(device.manufacturer -eq \"Lenovo\")",
+    "assignmentFilterManagementType": "devices"
+}

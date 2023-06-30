@@ -1,0 +1,7 @@
+{
+    "displayName": "Corporate macOS Devices",
+    "description": "Containing all corporate macOS Devices",
+    "platform": "macOS",
+    "rule": "(device.deviceOwnership -eq \"Corporate\")",
+    "assignmentFilterManagementType": "devices"
+}

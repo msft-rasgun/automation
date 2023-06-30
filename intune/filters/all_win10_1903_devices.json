@@ -1,0 +1,7 @@
+{
+    "displayName": "OS | Windows 10 | Build 1903",
+    "description": "Containing all Windows 10 version 1903",
+    "platform": "windows10AndLater",
+    "rule": "(device.osVersion -startsWith \"10.0.18362\")",
+    "assignmentFilterManagementType": "devices"
+}

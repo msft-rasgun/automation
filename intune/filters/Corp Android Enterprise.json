@@ -1,0 +1,7 @@
+{
+    "displayName": "Corporate Android Enterprise Devices",
+    "description": "Containing all corporate Android Enterprise Devices",
+    "platform": "androidForWork",
+    "rule": "(device.deviceOwnership -eq \"Corporate\")",
+    "assignmentFilterManagementType": "devices"
+}

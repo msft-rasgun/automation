@@ -1,0 +1,7 @@
+{
+    "displayName": "OS | Windows 10 | Build 21H2",
+    "description": "Containing all Windows 10 version 21H2",
+    "platform": "windows10AndLater",
+    "rule": "(device.osVersion -startsWith \"10.0.19044\")",
+    "assignmentFilterManagementType": "devices"
+}

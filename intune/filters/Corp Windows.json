@@ -1,0 +1,7 @@
+{
+    "displayName": "Corporate Windows Devices",
+    "description": "Containing all corporate Windows Devices",
+    "platform": "windows10AndLater",
+    "rule": "(device.deviceOwnership -eq \"Corporate\")",
+    "assignmentFilterManagementType": "devices"
+}

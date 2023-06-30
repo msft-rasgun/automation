@@ -1,0 +1,7 @@
+{
+    "displayName": "HW | WIN | All Virtual Windows Devices",
+    "description": "Containing all Virtual Windows Devices",
+    "platform": "windows10AndLater",
+    "rule": "(device.model -contains \"virtual\")",
+    "assignmentFilterManagementType": "devices"
+}

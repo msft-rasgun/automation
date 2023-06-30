@@ -1,0 +1,7 @@
+{
+    "displayName": "HW | WIN | All Microsoft Windows Devices",
+    "description": "Containing all Microsoft Windows Devices",
+    "platform": "windows10AndLater",
+    "rule": "(device.manufacturer -eq \"Microsoft\")",
+    "assignmentFilterManagementType": "devices"
+}

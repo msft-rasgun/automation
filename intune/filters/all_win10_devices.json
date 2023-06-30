@@ -1,0 +1,7 @@
+{
+    "displayName": "OS | All Windows 10 Devices",
+    "description": "Containing all Windows 10 versions",
+    "platform": "windows10AndLater",
+    "rule": "(device.osVersion -startsWith \"10.0.1\")",
+    "assignmentFilterManagementType": "devices"
+}

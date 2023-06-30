@@ -1,0 +1,7 @@
+{
+    "displayName": "OS | Windows 11 | Build 21H2",
+    "description": "Containing all Windows 11 version 21H2",
+    "platform": "windows10AndLater",
+    "rule": "(device.osVersion -startsWith \"10.0.22000\")",
+    "assignmentFilterManagementType": "devices"
+}
