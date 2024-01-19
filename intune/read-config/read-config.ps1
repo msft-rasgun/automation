@@ -29,20 +29,24 @@
     In order to make the export more reader friendly, the Conditional Access policies have been changed to contain displayName rather than guid
         
 .EXAMPLE
-    Read-Config.ps1 -LogPath C:\Temp -ExportPath C:\ExportFolder -Tenant <TenantID>
-    Export configuration using the application registration service principal while writing the log file to C:\Temp
+    Read-Config.ps1 -LogPath C:\Temp -ExportPath C:\ExportFolder -Tenant contoso.com
+    Export all configuration types in tenant contoso.com using user authentication while writing the log file to C:\Temp
 
 .EXAMPLE
-    Read-Config.ps1 -HostOutput -LogPath C:\Temp -ExportPath C:\ExportFolder -Tenant <TenantID>
-    Export configuration using the application registration service principal while writing the log file to C:\Temp and to the console
+    Read-Config.ps1 -NoHostOutput -LogPath C:\Temp -ExportPath C:\ExportFolder -Tenant contoso.com
+    Export all configuration types in tenant contoso.com using user authentication while writing the log file to C:\Temp without any console output
 
 .EXAMPLE
-    Read-Config.ps1 -HostOutput -LogPath C:\Temp -ExportPath C:\ExportFolder -VerboseLog -Tenant <TenantID>
-    Export configuration using the application registration service principal while writing the log file to C:\Temp and to the console with additional logging enabled
+    Read-Config.ps1 -LogPath C:\Temp -ExportPath C:\ExportFolder -VerboseLog -Tenant contoso.com
+    Export all configuration types in tenant contoso.com using user authentication while writing the log file to C:\Temp with additional logging enabled
 
 .EXAMPLE
-    Read-Config.ps1 -LogPath C:\Temp -ExportPath C:\ExportFolder -AppAuth -Tenant <TenenatID> -AppSecret <ApplicationSecret>
-    Export configuration using app authentication while writing the log file to C:\Temp
+    Read-Config.ps1 -LogPath C:\Temp -ExportPath C:\ExportFolder -Tenant contoso.com -AppAuth -AppClientID de8bc8b5-d9f9-48b1-a8ad-b748da725064 -AppSecret 12345abcde
+    Export configuration using app authentication using custom application registration and secret while writing the log file to C:\Temp
+
+.EXAMPLE
+    Read-Config.ps1 -LogPath C:\Temp -ExportPath C:\ExportFolder -Tenant contoso.com -export ConditionalAccess
+    Export Conditional Access policies in tenant contoso.com using user authentication while writing the log file to C:\Temp
 
 .INPUTS
     None, you cannot pipe objects into the script
@@ -66,7 +70,7 @@ PARAM(
 
     [Parameter(ParameterSetName = 'AppAuth')]
     [Parameter(ParameterSetName = 'UserAuth')]
-    [switch]$HostOutput,
+    [switch]$NoHostOutput,
 
     [Parameter(ParameterSetName = 'AppAuth')]
     [Parameter(ParameterSetName = 'UserAuth')]
@@ -90,8 +94,8 @@ PARAM(
     [Parameter(Mandatory=$true, ParameterSetName = 'AppAuth')]
     [string]$AppSecret,
 
-    [Parameter(Mandatory=$true, ParameterSetName = 'AppAuth')]
-    [Parameter(Mandatory=$true, ParameterSetName = 'UserAuth')]
+    [Parameter(ParameterSetName = 'AppAuth')]
+    [Parameter(ParameterSetName = 'UserAuth')]
     [ValidateSet('All','DeviceConfig','ConditionalAccess','Compliance','NamedLocations','EnrollmentRestrictions','AppConfig','AppProtection','Scripts','EndpointSecurity')]
     [String[]]$Export = 'All'
 )
@@ -112,7 +116,7 @@ Function Write-Log{
     Write-Log -Message "Message" -severity 3
     Writes Message to the log file as an error
     .NOTES
-    Version 2020-05-25
+    Version 2024-01-19
     #>
     PARAM(
         [Parameter(Mandatory=$true,ValueFromPipeline)][String]$Message,
@@ -137,7 +141,7 @@ Function Write-Log{
         $Date= Get-Date -Format "MM-dd-yyyy"
 
         "<![LOG[$Message]LOG]!><time=$([char]34)$Time$($TimeZoneBias.bias)$([char]34) date=$([char]34)$date$([char]34) component=$([char]34)$component$([char]34) context=$([char]34)$context$([char]34) type=$([char]34)$severity$([char]34) thread=$([char]34)$thread$([char]34) file=$([char]34)$source$([char]34)>"| Out-File -FilePath $Path -Append -NoClobber -Encoding default
-        If ($HostOutput){
+        If (-not $NoHostOutput){
             switch ($severity){
                 1 {$Color = "Green"}
                 2 {$Color = "Yellow"}
