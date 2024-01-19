@@ -29,20 +29,20 @@
     In order to make the export more reader friendly, the Conditional Access policies have been changed to contain displayName rather than guid
         
 .EXAMPLE
-    Read-Config.ps1 -LogPath C:\Temp -ExportPath C:\ExportFolder
+    Read-Config.ps1 -LogPath C:\Temp -ExportPath C:\ExportFolder -Tenant <TenantID>
     Export configuration using the application registration service principal while writing the log file to C:\Temp
 
 .EXAMPLE
-    Read-Config.ps1 -HostOutput -LogPath C:\Temp -ExportPath C:\ExportFolder
+    Read-Config.ps1 -HostOutput -LogPath C:\Temp -ExportPath C:\ExportFolder -Tenant <TenantID>
     Export configuration using the application registration service principal while writing the log file to C:\Temp and to the console
 
 .EXAMPLE
-    Read-Config.ps1 -HostOutput -LogPath C:\Temp -ExportPath C:\ExportFolder -VerboseLog
+    Read-Config.ps1 -HostOutput -LogPath C:\Temp -ExportPath C:\ExportFolder -VerboseLog -Tenant <TenantID>
     Export configuration using the application registration service principal while writing the log file to C:\Temp and to the console with additional logging enabled
 
 .EXAMPLE
-    Read-Config.ps1 -LogPath C:\Temp -ExportPath C:\ExportFolder -UserAuth -User user@domain.com
-    Export configuration using user authentication while writing the log file to C:\Temp
+    Read-Config.ps1 -LogPath C:\Temp -ExportPath C:\ExportFolder -AppAuth -Tenant <TenenatID> -AppSecret <ApplicationSecret>
+    Export configuration using app authentication while writing the log file to C:\Temp
 
 .INPUTS
     None, you cannot pipe objects into the script
@@ -51,10 +51,10 @@
     None
 
 .NOTES
-    Version 2023-06-01
+    Version 2024-01-19
 #>
 
-[CmdletBinding(DefaultParameterSetName = 'AppAuth')]
+[CmdletBinding(DefaultParameterSetName = 'UserAuth')]
 PARAM(
     [Parameter(ParameterSetName = 'AppAuth')]
     [Parameter(ParameterSetName = 'UserAuth')]
@@ -76,18 +76,15 @@ PARAM(
     [Parameter(Mandatory=$true, ParameterSetName = 'UserAuth')]
     [string]$ExportPath,
 
-    [Parameter(Mandatory=$true, ParameterSetName = 'UserAuth')]
-    [switch]$UserAuth,
-
-    [Parameter(Mandatory=$true, ParameterSetName = 'UserAuth')]
-    [string]$User,
+    [Parameter(Mandatory=$true, ParameterSetName = 'AppAuth')]
+    [switch]$AppAuth,
 
     [Parameter(ParameterSetName = 'AppAuth')]
     [Parameter(ParameterSetName = 'UserAuth')]
-    [string]$AppClientID = "d1ddf0e4-d672-4dae-b554-9d5bdfd93547",
+    [string]$AppClientID,
 
     [Parameter(Mandatory=$true, ParameterSetName = 'AppAuth')]
-    [Parameter(ParameterSetName = 'UserAuth')]
+    [Parameter(Mandatory=$true, ParameterSetName = 'UserAuth')]
     [string]$Tenant,
 
     [Parameter(Mandatory=$true, ParameterSetName = 'AppAuth')]
@@ -151,110 +148,6 @@ Function Write-Log{
     }
 }
 
-function Get-AuthToken{
-    <#
-    .SYNOPSIS
-    This function is getting and returning an authentication header
-    .DESCRIPTION
-    This function is getting and returning an authentication header
-    .EXAMPLE
-    Get-AuthToken -Tenant $Tenant -ClientID $IntuneClientId -User $User
-    Get the auth token based on user authentication
-    .EXAMPLE
-    Get-AuthToken -Tenant $Tenant -Client $AppClientID -AppSecret $AppSecret
-    Get the auth token based on application authentication
-    .NOTES
-    Version 2020-06-10
-    #>
-    PARAM(
-        [Parameter(Mandatory=$true, ParameterSetName = 'AppAuth')]
-        [Parameter(Mandatory=$true, ParameterSetName = 'UserAuth')]
-        [string]$Tenant,
-        [Parameter(Mandatory=$true, ParameterSetName = 'UserAuth')]
-        [string]$User,
-        [Parameter(Mandatory=$true, ParameterSetName = 'AppAuth')]
-        [Parameter(Mandatory=$true, ParameterSetName = 'UserAuth')]
-        [string]$ClientId,
-        [Parameter(Mandatory=$true, ParameterSetName = 'AppAuth')]
-        [string]$AppSecret
-    )
-
-    Process{
-        Write-Log -Message "Checking for AzureAD module..."
-        $AadModule = Get-Module -Name "AzureAD" -ListAvailable
-        if ($null -eq $AadModule) {
-            Write-Log -Message "AzureAD PowerShell module not found, looking for AzureADPreview" -Severity 2
-            $AadModule = Get-Module -Name "AzureADPreview" -ListAvailable
-        }
-
-        if ($null -eq $AadModule) {
-            Write-Log -Message "AzureAD Powershell module not installed..." -Severity 3
-            Write-Log -Message "Install by running 'Install-Module AzureAD' or 'Install-Module AzureADPreview' from an elevated PowerShell prompt" -Severity 3
-            Write-Log -Message "Script can't continue..." -Severity 3
-            exit
-        }
-
-        # Getting path to ActiveDirectory Assemblies
-        # If the module count is greater than 1 find the latest version
-        if ($AadModule.count -gt 1) {
-            $Latest_Version = ($AadModule | Select-Object version | Sort-Object)[-1]
-            $aadModule = $AadModule | Where-Object { $_.version -eq $Latest_Version.version }
-        }
-
-        Write-Log -Message "Found module: $($AadModule.Name)"
-
-        $adal = Join-Path $AadModule.ModuleBase "Microsoft.IdentityModel.Clients.ActiveDirectory.dll"
-        $adalforms = Join-Path $AadModule.ModuleBase "Microsoft.IdentityModel.Clients.ActiveDirectory.Platform.dll"
-
-        [System.Reflection.Assembly]::LoadFrom($adal) | Out-Null
-        [System.Reflection.Assembly]::LoadFrom($adalforms) | Out-Null
-
-        # Set variables to be used
-        $redirectUri = "urn:ietf:wg:oauth:2.0:oob"
-        $resourceAppIdURI = "https://graph.microsoft.com"
-        $authority = "https://login.microsoftonline.com/$Tenant"
-
-        try {
-            $authContext = New-Object "Microsoft.IdentityModel.Clients.ActiveDirectory.AuthenticationContext" -ArgumentList $authority
-            # https://msdn.microsoft.com/library/azure/microsoft.identitymodel.clients.activedirectory.promptbehavior.aspx
-            # Change the prompt behaviour to force credentials each time: Auto, Always, Never, RefreshSession
-
-            # Depending on authentication method, get the auth token
-            If ($UserAuth){
-                $platformParameters = New-Object "Microsoft.IdentityModel.Clients.ActiveDirectory.PlatformParameters" -ArgumentList "Auto"
-                $userId = New-Object "Microsoft.IdentityModel.Clients.ActiveDirectory.UserIdentifier" -ArgumentList ($User, "OptionalDisplayableId")
-                $authResult = $authContext.AcquireTokenAsync($resourceAppIdURI,$ClientId,$redirectUri,$platformParameters,$userId).Result
-            }
-            Else{
-                $ClientCredential = New-Object "Microsoft.IdentityModel.Clients.ActiveDirectory.ClientCredential" -ArgumentList ($ClientId,$AppSecret) 
-                $authResult = $authContext.AcquireTokenAsync($resourceAppIdURI,$ClientCredential).Result
-            }
-            
-            # If the accesstoken is valid then create the authentication header
-            if ($authResult.AccessToken) {
-                # Creating header for Authorization token
-                $authHeader = @{
-                    'Content-Type' = 'application/json'
-                    'Authorization' = "Bearer " + $authResult.AccessToken
-                    'ExpiresOn' = $authResult.ExpiresOn
-                }
-                Write-Log -Message "Authentication header created"
-                return $authHeader
-            }
-            else {
-                Write-Log -Message "Authorization Access Token is null, please re-run authentication..." -Severity 3
-                break
-            }
-        }
-        catch {
-            Write-Log -Message "Unable to get authentication header" -severity 3
-            Write-Log -Message $_.Exception.Message -Severity 3
-            Write-Log -Message $_.Exception.ItemName -Severity 3
-            Write-Log -Message $_.Exception -Severity 3
-            exit 1
-        }   
-    }
-}
 
 Function Get-MsGraphCollection{
     <#
@@ -311,7 +204,7 @@ function Get-MsGraphObject{
     Get-MsGraphObject -MSGraphPath "deviceManagement/deviceEnrollmentConfigurations" -MSGraphVersion "beta"
     Returns device enrollment configuration using the Beta version of the GraphAPI
     .NOTES
-    Version 2023-05-30
+    Version 2024-01-19
     #>
     PARAM(
         [String]$MSGraphHost = "graph.microsoft.com",
@@ -324,19 +217,15 @@ function Get-MsGraphObject{
         $FullUri = "https://$MSGraphHost/$MSGraphVersion/$MSGraphPath"
         If ($VerboseLog){Write-Log -Message "VERBOSE: GET $FullUri"}
         try {
-            return Invoke-RestMethod -Method Get -Uri $FullUri -Headers $authToken
+            return Invoke-MgGraphRequest -Method Get -Uri $FullUri
         } 
         catch {
             $Response = $_.Exception.Response
             if ($IgnoreNotFound -and $Response.StatusCode -eq "NotFound") {
                 return $null
             }
-            $ResponseStream = $Response.GetResponseStream()
-            $ResponseReader = New-Object System.IO.StreamReader $ResponseStream
-            $ResponseContent = $ResponseReader.ReadToEnd()
             Write-Log -Message "Request Failed: $($_.Exception.Message)`n$($_.ErrorDetails)" -severity 3
             Write-Log -Message "Request URL: $FullUri" -severity 3
-            Write-Log -Message "Response Content:`n$ResponseContent" -severity 3
             If ($StopOnError){
                 break
             }
@@ -433,7 +322,6 @@ Function Get-ObjectDisplayName{
                 Write-Log -Message "Object type: $ObjectType unknown" -severity 3
             }
         }
-        
         If ($null -eq $Object){
             return $ID
         }
@@ -521,7 +409,7 @@ Function Export-JSONData(){
             Write-Log -Message "$ExportPath doesn't exist, can't export JSON Data" -Severity 3
         }
         else {
-            $JSON1 = ConvertTo-Json $JSON -Depth 10
+            $JSON1 = ConvertTo-Json $JSON -Depth 20
             $JSON_Convert = $JSON1 | ConvertFrom-Json
             $displayName = $JSON_Convert.displayName
             # Updating display name to follow file naming conventions - https://msdn.microsoft.com/en-us/library/windows/desktop/aa365247%28v=vs.85%29.aspx
@@ -539,7 +427,7 @@ Function Export-JSONData(){
             }
 
             $ExportFullFilename = Join-Path -Path $ExportPath -ChildPath $FileName_JSON
-            $object | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ExportFullFilename
+            $object | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $ExportFullFilename
             Write-Log -Message "JSON created in $ExportFullFilename"
         }
     
@@ -560,7 +448,7 @@ Function Add-AssignmentDisplayName{
     .EXAMPLE
     Add-AssignmentDisplayName $Assignment.target
     .NOTES
-    Version 2022-10-04
+    Version 2024-01-19
     #>
     PARAM(
         [Parameter(Mandatory=$true)][object]$target
@@ -570,23 +458,28 @@ Function Add-AssignmentDisplayName{
             "#microsoft.graph.groupAssignmentTarget" {
                 If (IsGUID -InputStr $target.groupId){
                     $displayName = Get-ObjectDisplayName -ID $assignment.target.groupId -ObjectType "Group"
-                    Add-Member -InputObject $target -MemberType 'NoteProperty' -Name 'displayName' -Value $displayName
+#                    Add-Member -InputObject $target -MemberType 'NoteProperty' -Name 'displayName' -Value $displayName
+                    $target.displayName = $displayName
                 }
             }
             "#microsoft.graph.exclusionGroupAssignmentTarget" {
                 If (IsGUID -InputStr $target.groupId){
                     $displayName = Get-ObjectDisplayName -ID $assignment.target.groupId -ObjectType "Group"
-                    Add-Member -InputObject $target -MemberType 'NoteProperty' -Name 'displayName' -Value $displayName
+#                    Add-Member -InputObject $target -MemberType 'NoteProperty' -Name 'displayName' -Value $displayName
+                    $target.displayName = $displayName
                 }
             }
             "#microsoft.graph.allLicensedUsersAssignmentTarget" {
-                Add-Member -InputObject $target -MemberType 'NoteProperty' -Name 'displayName' -Value 'All Users'
+#                Add-Member -InputObject $target -MemberType 'NoteProperty' -Name 'displayName' -Value 'All Users'
+                $target.displayName = 'All Users'
             }
             "#microsoft.graph.allDevicesAssignmentTarget" {
-                Add-Member -InputObject $target -MemberType 'NoteProperty' -Name 'displayName' -Value 'All Devices'
+#                Add-Member -InputObject $target -MemberType 'NoteProperty' -Name 'displayName' -Value 'All Devices'
+                $target.displayName = 'All Devices'
             }
             default {
-                Add-Member -InputObject $assignment.target -MemberType 'NoteProperty' -Name 'displayName' -Value 'Unknown assignment type'
+#                Add-Member -InputObject $assignment.target -MemberType 'NoteProperty' -Name 'displayName' -Value 'Unknown assignment type'
+                $target.displayName = 'Unknown assignment type'
             }
         }
         return $target
@@ -598,7 +491,7 @@ Function Add-AssignmentDisplayName{
 # **************************************************************************************************
 #region initAuth
 
-$Version = "2023-06-01"
+$Version = "2024-01-19"
 
 # Set log file name to the script name
 $LogName = $MyInvocation.MyCommand.Name.Substring(0,$MyInvocation.MyCommand.Name.LastIndexOf("."))
@@ -606,47 +499,24 @@ $LogName = $MyInvocation.MyCommand.Name.Substring(0,$MyInvocation.MyCommand.Name
 Write-Log -Message "***************************************************"
 Write-Log -Message "Starting script version $Version"
 
-If ($UserAuth -and -not $Tenant){
-    try{
-        $userUpn = New-Object "System.Net.Mail.MailAddress" -ArgumentList $User
-        $Tenant = $userUpn.Host
+## Get user or app auth with connect-mgGraph
+
+$Scopes = "Group.Read.All,DeviceManagementConfiguration.Read.All,DeviceManagementApps.Read.all"
+
+If ($AppAuth){
+    ## NOT IMPLEMENTED YET
+    Connect-MgGraph -ClientId $AppClientID -TenantId $Tenant -ClientSecretCredential $AppSecret
+}
+Else{
+    If ($AppClientID){
+        Connect-MgGraph -ClientId $AppClientID -TenantId $Tenant -NoWelcome -Scopes $Scopes
     }
-    catch{
-        Write-Log -Message "Unable to verify user UPN" -Severity 3
-        Write-Log -Message $_.Exception -Severity 3
-        exit 1
+    Else{
+        Connect-MgGraph -TenantId $Tenant -NoWelcome -Scopes $Scopes
     }
+    
 }
 
-Write-Log -Message "Using tenant: $Tenant"
-
-if($authToken){
-    # Setting DateTime to Universal time to work in all timezones
-    $DateTime = (Get-Date).ToUniversalTime()
-
-    # If the authToken exists checking when it expires
-    $TokenExpires = ($authToken.ExpiresOn.datetime - $DateTime).Minutes
-
-    if($TokenExpires -le 0){
-        Write-Log -Message "Authentication Token expired" $TokenExpires "minutes ago" -Severity 2
-        If ($UserAuth){
-            $authToken = Get-AuthToken -Tenant $Tenant -ClientID $AppClientID -User $User
-        }
-        else {
-            $authToken = Get-AuthToken -Tenant $Tenant -Client $AppClientID -AppSecret $AppSecret
-        }
-    }
-}
-else {
-    # Authentication doesn't exist, calling Get-AuthToken function
-    If ($UserAuth){
-        $authToken = Get-AuthToken -Tenant $Tenant -ClientID $AppClientID -User $User
-    }
-    else {
-        $authToken = Get-AuthToken -Tenant $Tenant -Client $AppClientID -AppSecret $AppSecret
-    }
-}
-#endregion
 
 Add-ExportFolder -Folder $ExportPath
 
