@@ -495,7 +495,7 @@ Function Add-AssignmentDisplayName{
 # **************************************************************************************************
 #region initAuth
 
-$Version = "2024-01-19"
+$Version = "2024-01-23"
 
 # Set log file name to the script name
 $LogName = $MyInvocation.MyCommand.Name.Substring(0,$MyInvocation.MyCommand.Name.LastIndexOf("."))
@@ -503,22 +503,25 @@ $LogName = $MyInvocation.MyCommand.Name.Substring(0,$MyInvocation.MyCommand.Name
 Write-Log -Message "***************************************************"
 Write-Log -Message "Starting script version $Version"
 
+### Check Microsoft.Graph module is installed and loaded
+
+### Add error control to auth calls
+
 ## Get user or app auth with connect-mgGraph
 
-$Scopes = "Group.Read.All,DeviceManagementConfiguration.Read.All,DeviceManagementApps.Read.all"
+$Scopes = "Group.Read.All,DeviceManagementConfiguration.Read.All,DeviceManagementApps.Read.all,DeviceManagementServiceConfiguration.Read.All"
 
 If ($AppAuth){
     ## NOT IMPLEMENTED YET
-    Connect-MgGraph -ClientId $AppClientID -TenantId $Tenant -ClientSecretCredential $AppSecret
+    Connect-MgGraph -ClientId $AppClientID -TenantId $Tenant -ClientSecretCredential $AppSecret -ErrorAction Stop
 }
 Else{
     If ($AppClientID){
-        Connect-MgGraph -ClientId $AppClientID -TenantId $Tenant -NoWelcome -Scopes $Scopes
+        Connect-MgGraph -ClientId $AppClientID -TenantId $Tenant -NoWelcome -Scopes $Scopes -ErrorAction Stop
     }
     Else{
-        Connect-MgGraph -TenantId $Tenant -NoWelcome -Scopes $Scopes
+        Connect-MgGraph -TenantId $Tenant -NoWelcome -Scopes $Scopes -ErrorAction Stop
     }
-    
 }
 
 
