@@ -509,17 +509,19 @@ Write-Log -Message "Starting script version $Version"
 
 ## Get user or app auth with connect-mgGraph
 
-$Scopes = "Group.Read.All,DeviceManagementConfiguration.Read.All,DeviceManagementApps.Read.all,DeviceManagementServiceConfiguration.Read.All"
-
 If ($AppAuth){
     ## NOT IMPLEMENTED YET
     Connect-MgGraph -ClientId $AppClientID -TenantId $Tenant -ClientSecretCredential $AppSecret -ErrorAction Stop
 }
 Else{
     If ($AppClientID){
+        $Scopes = "Group.Read.All,DeviceManagementConfiguration.Read.All,DeviceManagementApps.Read.all,DeviceManagementServiceConfiguration.Read.All"
         Connect-MgGraph -ClientId $AppClientID -TenantId $Tenant -NoWelcome -Scopes $Scopes -ErrorAction Stop
     }
     Else{
+        # Limit scope when using the default application registration as it doesn't have DeviceManagementServiceConfiguration.Read.All
+        # Export of Device Enrollment policies will fail
+        $Scopes = "Group.Read.All,DeviceManagementConfiguration.Read.All,DeviceManagementApps.Read.all"
         Connect-MgGraph -TenantId $Tenant -NoWelcome -Scopes $Scopes -ErrorAction Stop
     }
 }
@@ -576,6 +578,7 @@ If ($Export -contains "All" -or $Export -contains "DeviceConfig"){
             if($policy.templateReference.templateId){
                 Write-Log -Message "Found template reference"
                 Add-Member -InputObject $PolicyBody -MemberType 'NoteProperty' -Name 'templateId' -Value $policy.templateReference.templateId
+                Add-Member -InputObject $PolicyBody -MemberType 'NoteProperty' -Name 'templateFamily' -Value $policy.templateReference.templateId
                 Add-Member -InputObject $PolicyBody -MemberType 'NoteProperty' -Name 'templateDisplayVersion' -Value $policy.templateReference.templateDisplayVersion
                 Add-Member -InputObject $PolicyBody -MemberType 'NoteProperty' -Name 'TemplateDisplayName' -Value $policy.templateReference.TemplateDisplayName
             }
@@ -593,6 +596,36 @@ If ($Export -contains "All" -or $Export -contains "DeviceConfig"){
     }
 }
 
+If ($Export -contains "All" -or $Export -contains "DeviceConfig"){
+    $WindowsFeatureUpdatePolicies = Get-MsGraphObject -MSGraphPath "deviceManagement/windowsFeatureUpdateProfiles?`$expand=assignments" -MSGraphVersion "beta"
+    foreach($policy in $WindowsFeatureUpdatePolicies.value){
+        $ExportSubfolder = Join-Path -Path $ExportPath -ChildPath "DeviceConfigurationPolicy\WindowsFeatureUpdate"
+        Add-ExportFolder -Folder $ExportSubfolder
+        Write-Log -Message "Device Configuration Policy: $($policy.displayName)"
+        If ($policy.assignments){
+            foreach ($assignment in $policy.assignments){
+                $assignment.target = Add-AssignmentDisplayName -target $assignment.target
+            }
+        }
+        Export-JSONData -JSON $policy -ExportPath $ExportSubfolder
+    }
+}
+
+If ($Export -contains "All" -or $Export -contains "DeviceConfig"){
+    $WindowsDriverUpdatePolicies = Get-MsGraphObject -MSGraphPath "deviceManagement/windowsDriverUpdateProfiles?`$expand=assignments" -MSGraphVersion "beta"
+    foreach($policy in $WindowsDriverUpdatePolicies.value){
+        $ExportSubfolder = Join-Path -Path $ExportPath -ChildPath "DeviceConfigurationPolicy\WindowsDriverUpdate"
+        Add-ExportFolder -Folder $ExportSubfolder
+        Write-Log -Message "Device Configuration Policy: $($policy.displayName)"
+        If ($policy.assignments){
+            foreach ($assignment in $policy.assignments){
+                $assignment.target = Add-AssignmentDisplayName -target $assignment.target
+            }
+        }
+        Export-JSONData -JSON $policy -ExportPath $ExportSubfolder
+    }
+}
+
 If ($Export -contains "All" -or $Export -contains "Compliance"){
     $DeviceCompliancePolicies = Get-MsGraphObject -MSGraphPath "deviceManagement/deviceCompliancePolicies?`$expand=assignments" -MSGraphVersion "beta"
     foreach($policy in $DeviceCompliancePolicies.value){
@@ -603,7 +636,6 @@ If ($Export -contains "All" -or $Export -contains "Compliance"){
             "*MacOS*" {$PolicyType = "Compliance_MacOS"}
             default {$PolicyType = ""}
         }
-#        $ExportSubfolder = Join-Path -Path $ExportPath -ChildPath "CompliancePolicy"
         $ExportSubfolder = Join-Path -Path $ExportPath -ChildPath $PolicyType
         Add-ExportFolder -Folder $ExportSubfolder
         Write-Log -Message "Device Compliance Policy: $($policy.displayName)"
@@ -612,6 +644,32 @@ If ($Export -contains "All" -or $Export -contains "Compliance"){
                 $assignment.target = Add-AssignmentDisplayName -target $assignment.target
             }
         }
+
+        If ($policy.deviceCompliancePolicyScript){
+            $ScriptContent = (Get-MsGraphObject -MSGraphPath "deviceManagement/deviceComplianceScripts/$($policy.deviceCompliancePolicyScript.deviceComplianceScriptId)" -MSGraphVersion "beta").detectionScriptContent
+            $DecodedScript = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($ScriptContent))
+            $displayName = $Policy.displayName
+            # Updating display name to follow file naming conventions - https://msdn.microsoft.com/en-us/library/windows/desktop/aa365247%28v=vs.85%29.aspx
+            $DisplayName = $DisplayName -replace '\<|\>|:|"|/|\\|\||\?|\*', "_"
+            $FileName = "$DisplayName" + "_" + $(get-date -f yyyy-MM-dd_H-mm-ss) + ".ScriptContent"
+            $ExportFullFilename = Join-Path -Path $ExportSubfolder -ChildPath $FileName
+            Write-Log -Message "Export script content: $ExportFullFilename"
+            $DecodedScript | Out-File -FilePath $ExportFullFilename
+
+            $rulesContent = $policy.deviceCompliancePolicyScript.rulesContent
+            $DecodedRules = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($rulesContent))
+            $displayName = $Policy.displayName
+            # Updating display name to follow file naming conventions - https://msdn.microsoft.com/en-us/library/windows/desktop/aa365247%28v=vs.85%29.aspx
+            $DisplayName = $DisplayName -replace '\<|\>|:|"|/|\\|\||\?|\*', "_"
+            $FileName = "$DisplayName" + "_" + $(get-date -f yyyy-MM-dd_H-mm-ss) + ".RulesContent"
+            $ExportFullFilename = Join-Path -Path $ExportSubfolder -ChildPath $FileName
+            Write-Log -Message "Export script content: $ExportFullFilename"
+            $DecodedRules | Out-File -FilePath $ExportFullFilename
+        }
+
+
+
+
         Export-JSONData -JSON $policy -ExportPath $ExportSubfolder
     }
 }
@@ -918,7 +976,7 @@ If ($Export -contains "All" -or $Export -contains "EndpointSecurity"){
         $TemplateId = $policy.templateId
         $roleScopeTagIds = $policy.roleScopeTagIds
 
-        $ES_Template = $Templates.value | ?  { $_.id -eq $policy.templateId }
+        $ES_Template = $Templates.value | Where-Object { $_.id -eq $policy.templateId }
 
         $TemplateDisplayName = $ES_Template.displayName
         $TemplateId = $ES_Template.id
@@ -954,6 +1012,9 @@ If ($Export -contains "All" -or $Export -contains "EndpointSecurity"){
         }
     }
 }
+
+
+
 
 #endregion
 
